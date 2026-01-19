@@ -5,13 +5,13 @@
 set -e
 
 VERSION="1.0.0"
-REPO_URL="https://github.com/orqus-chain/orqus-network"
-REPO_RAW="https://raw.githubusercontent.com/orqus-chain/orqus-network/main"
+REPO_URL="https://github.com/orqus-com/orqus-network"
+REPO_RAW="https://raw.githubusercontent.com/orqus-com/orqus-network/main"
 DATA_DIR="${ORQUS_DATA_DIR:-$HOME/.orqus}"
 
-# Docker images
-RETH_IMAGE="ghcr.io/orqus-chain/orqus-reth:latest"
-ORQUSBFT_IMAGE="ghcr.io/orqus-chain/orqusbft:latest"
+# Docker images (use your private registry)
+RETH_IMAGE="registry.orqes.com/orqus-reth:latest"
+ORQUSBFT_IMAGE="registry.orqes.com/orqusbft:latest"
 COMETBFT_IMAGE="cometbft/cometbft:v0.38.15"
 
 # Colors
