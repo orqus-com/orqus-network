@@ -132,6 +132,8 @@ cmd_init() {
     # Create directories
     info "Creating directories..."
     mkdir -p "$DATA_DIR"/{reth,orqusbft,cometbft/{config,data},jwt}
+    # Ensure CometBFT directories are writable by container
+    chmod -R 777 "$DATA_DIR/cometbft"
 
     # Fetch chain info
     info "Fetching chain info..."
@@ -155,7 +157,7 @@ cmd_init() {
     # Initialize CometBFT (generate node keys)
     info "Initializing CometBFT..."
     if [ ! -f "$DATA_DIR/cometbft/config/node_key.json" ]; then
-        docker run --rm --user 0:0 \
+        docker run --rm \
             -v "$DATA_DIR/cometbft:/cometbft" \
             "$COMETBFT_IMAGE" init 2>/dev/null
 
@@ -167,7 +169,7 @@ cmd_init() {
 
     # Get node ID
     local node_id
-    node_id=$(docker run --rm --user 0:0 \
+    node_id=$(docker run --rm \
         -v "$DATA_DIR/cometbft:/cometbft" \
         "$COMETBFT_IMAGE" show-node-id 2>/dev/null)
 
