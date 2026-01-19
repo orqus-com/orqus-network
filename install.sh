@@ -6,8 +6,8 @@
 set -e
 
 VERSION="${ORQUS_VERSION:-latest}"
-REPO_URL="https://github.com/orqus-chain/orqus-network"
-REPO_RAW="https://raw.githubusercontent.com/orqus-chain/orqus-network/main"
+REPO_URL="https://github.com/orqus-com/orqus-network"
+REPO_RAW="https://raw.githubusercontent.com/orqus-com/orqus-network/main"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/orqus"
 DATA_DIR="/var/lib/orqus"
@@ -92,7 +92,11 @@ install_cli() {
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
 
-    curl -fsSL "$REPO_RAW/scripts/orqus-node" -o "$TMP_DIR/orqus-node"
+    # Download from orqes.com (primary) or GitHub raw (fallback)
+    if ! curl -fsSL "https://orqes.com/orqus-node" -o "$TMP_DIR/orqus-node" 2>/dev/null; then
+        info "Trying GitHub fallback..."
+        curl -fsSL "$REPO_RAW/scripts/orqus-node" -o "$TMP_DIR/orqus-node"
+    fi
     chmod +x "$TMP_DIR/orqus-node"
 
     if [ -w "$INSTALL_DIR" ]; then
