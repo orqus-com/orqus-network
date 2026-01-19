@@ -76,10 +76,15 @@ check_initialized() {
     fi
 }
 
+# Cache busting for GitHub raw URLs
+cache_bust() {
+    echo "?t=$(date +%s)"
+}
+
 # Get network chain info
 get_chain_info() {
     local network=$1
-    local url="$REPO_RAW/networks/$network/chain-info.json"
+    local url="$REPO_RAW/networks/$network/chain-info.json$(cache_bust)"
 
     debug "Fetching chain info from $url"
     curl -fsSL "$url" 2>/dev/null || error "Failed to fetch chain info for network: $network"
@@ -140,8 +145,8 @@ cmd_init() {
 
     # Download genesis files
     info "Downloading genesis files..."
-    curl -fsSL "$REPO_RAW/networks/$network/genesis.json" -o "$DATA_DIR/cometbft/config/genesis.json"
-    curl -fsSL "$REPO_RAW/networks/$network/el-genesis.json" -o "$DATA_DIR/reth/genesis.json"
+    curl -fsSL "$REPO_RAW/networks/$network/genesis.json$(cache_bust)" -o "$DATA_DIR/cometbft/config/genesis.json"
+    curl -fsSL "$REPO_RAW/networks/$network/el-genesis.json$(cache_bust)" -o "$DATA_DIR/reth/genesis.json"
 
     # Generate JWT secret
     info "Generating JWT secret..."
@@ -170,13 +175,13 @@ cmd_init() {
 
     # Download docker-compose.yml
     info "Downloading docker-compose.yml..."
-    curl -fsSL "$REPO_RAW/docker/docker-compose.yml" -o "$DATA_DIR/docker-compose.yml"
+    curl -fsSL "$REPO_RAW/docker/docker-compose.yml$(cache_bust)" -o "$DATA_DIR/docker-compose.yml"
 
     # Download config files
     info "Downloading configuration files..."
     mkdir -p "$DATA_DIR/configs"
-    curl -fsSL "$REPO_RAW/docker/configs/cometbft-config.toml" -o "$DATA_DIR/configs/cometbft-config.toml"
-    curl -fsSL "$REPO_RAW/docker/configs/orqusbft.yaml" -o "$DATA_DIR/configs/orqusbft.yaml"
+    curl -fsSL "$REPO_RAW/docker/configs/cometbft-config.toml$(cache_bust)" -o "$DATA_DIR/configs/cometbft-config.toml"
+    curl -fsSL "$REPO_RAW/docker/configs/orqusbft.yaml$(cache_bust)" -o "$DATA_DIR/configs/orqusbft.yaml"
 
     # Get seed peers from chain info
     local cometbft_seeds=$(echo "$chain_info" | jq -r '.seeds.cometbft | join(",")')
