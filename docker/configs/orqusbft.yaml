@@ -1,0 +1,43 @@
+# OrqusBFT Configuration
+# This file is used by the OrqusBFT bridge service
+
+chainId: 153871
+feeRecipient: "0x0000000000000000000000000000000000000000"
+dataDir: "/data"
+
+ethereum:
+  endpoint: "http://orqus-reth:8545"
+  engineAPI: "http://orqus-reth:8551"
+  jwtSecret: "/jwt/jwt.hex"
+
+cometbft:
+  endpoint: "http://cometbft:26657"
+  homeDir: "/cometbft"
+
+bridge:
+  listenAddr: "0.0.0.0:8080"
+  logLevel: "info"
+  enableBridging: true
+
+metrics:
+  enabled: true
+  listenAddr: "0.0.0.0:9002"
+
+consensus:
+  epochLength: 270
+  blockPeriod: 2
+
+slashing:
+  enabled: true
+  missedBlockThreshold: 10
+  epochDuration: 540
+  jailDuration: 3600
+
+storage:
+  retainBlocks: 0
+
+validatorCommitment:
+  enabled: false
+  minValidators: 4
+  maxChangeRatio: 0.33
+  gracePeriodBlocks: 2

@@ -1,0 +1,25 @@
+# Data directories
+docker/data/
+data/
+
+# Environment files with secrets
+docker/.env
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak

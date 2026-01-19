@@ -1,0 +1,531 @@
+#!/bin/bash
+# Orqus Node CLI
+# A simple CLI for managing Orqus blockchain nodes
+
+set -e
+
+VERSION="1.0.0"
+REPO_URL="https://github.com/orqus-chain/orqus-network"
+REPO_RAW="https://raw.githubusercontent.com/orqus-chain/orqus-network/main"
+DATA_DIR="${ORQUS_DATA_DIR:-$HOME/.orqus}"
+
+# Docker images
+RETH_IMAGE="ghcr.io/orqus-chain/orqus-reth:latest"
+ORQUSBFT_IMAGE="ghcr.io/orqus-chain/orqusbft:latest"
+COMETBFT_IMAGE="cometbft/cometbft:v0.38.15"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+debug() { [ "$DEBUG" = "true" ] && echo -e "${BLUE}[DEBUG]${NC} $1"; }
+
+# Show help
+show_help() {
+    cat << EOF
+Orqus Node CLI v${VERSION}
+
+Usage: orqus-node <command> [options]
+
+Commands:
+  init       Initialize a new node
+  start      Start the node
+  stop       Stop the node
+  restart    Restart the node
+  status     Show node status
+  logs       View node logs
+  info       Show node information
+  update     Update node to latest version
+  reset      Reset node data (keeps keys)
+  purge      Remove all node data
+
+Init Options:
+  --network <name>    Network to join (testnet, mainnet) [default: testnet]
+  --data-dir <path>   Data directory [default: ~/.orqus]
+  --validator         Initialize as validator (requires keys)
+
+Logs Options:
+  -f, --follow        Follow log output
+  -n, --lines <num>   Number of lines to show [default: 100]
+  --service <name>    Show logs for specific service (reth, orqusbft, cometbft)
+
+Examples:
+  orqus-node init --network testnet
+  orqus-node start
+  orqus-node logs -f --service cometbft
+  orqus-node status
+
+Environment Variables:
+  ORQUS_DATA_DIR      Data directory (default: ~/.orqus)
+  DEBUG               Enable debug output (true/false)
+
+For more information: $REPO_URL
+EOF
+}
+
+# Check if initialized
+check_initialized() {
+    if [ ! -f "$DATA_DIR/docker-compose.yml" ]; then
+        error "Node not initialized. Run 'orqus-node init --network <network>' first."
+    fi
+}
+
+# Get network chain info
+get_chain_info() {
+    local network=$1
+    local url="$REPO_RAW/networks/$network/chain-info.json"
+
+    debug "Fetching chain info from $url"
+    curl -fsSL "$url" 2>/dev/null || error "Failed to fetch chain info for network: $network"
+}
+
+# Initialize node
+cmd_init() {
+    local network="testnet"
+    local validator=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --network)
+                network="$2"
+                shift 2
+                ;;
+            --data-dir)
+                DATA_DIR="$2"
+                shift 2
+                ;;
+            --validator)
+                validator=true
+                shift
+                ;;
+            *)
+                error "Unknown option: $1"
+                ;;
+        esac
+    done
+
+    info "Initializing Orqus node for network: $network"
+    info "Data directory: $DATA_DIR"
+
+    # Check if already initialized
+    if [ -f "$DATA_DIR/docker-compose.yml" ]; then
+        warn "Node already initialized at $DATA_DIR"
+        read -p "Reinitialize? This will reset configurations (y/N): " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            info "Aborted."
+            exit 0
+        fi
+    fi
+
+    # Create directories
+    info "Creating directories..."
+    mkdir -p "$DATA_DIR"/{reth,orqusbft,cometbft/{config,data},jwt}
+
+    # Fetch chain info
+    info "Fetching chain info..."
+    local chain_info
+    chain_info=$(get_chain_info "$network")
+
+    local chain_id=$(echo "$chain_info" | jq -r '.chainId')
+    local chain_name=$(echo "$chain_info" | jq -r '.name')
+
+    info "Chain: $chain_name (ID: $chain_id)"
+
+    # Download genesis files
+    info "Downloading genesis files..."
+    curl -fsSL "$REPO_RAW/networks/$network/genesis.json" -o "$DATA_DIR/cometbft/config/genesis.json"
+    curl -fsSL "$REPO_RAW/networks/$network/el-genesis.json" -o "$DATA_DIR/reth/genesis.json"
+
+    # Generate JWT secret
+    info "Generating JWT secret..."
+    openssl rand -hex 32 > "$DATA_DIR/jwt/jwt.hex"
+
+    # Initialize CometBFT (generate node keys)
+    info "Initializing CometBFT..."
+    if [ ! -f "$DATA_DIR/cometbft/config/node_key.json" ]; then
+        docker run --rm \
+            -v "$DATA_DIR/cometbft:/cometbft" \
+            "$COMETBFT_IMAGE" init 2>/dev/null
+
+        # Remove auto-generated genesis (we use our own)
+        rm -f "$DATA_DIR/cometbft/config/genesis.json.bak" 2>/dev/null || true
+    else
+        info "Node keys already exist, skipping key generation."
+    fi
+
+    # Get node ID
+    local node_id
+    node_id=$(docker run --rm \
+        -v "$DATA_DIR/cometbft:/cometbft" \
+        "$COMETBFT_IMAGE" show-node-id 2>/dev/null)
+
+    info "Node ID: $node_id"
+
+    # Download docker-compose.yml
+    info "Downloading docker-compose.yml..."
+    curl -fsSL "$REPO_RAW/docker/docker-compose.yml" -o "$DATA_DIR/docker-compose.yml"
+
+    # Download config files
+    info "Downloading configuration files..."
+    mkdir -p "$DATA_DIR/configs"
+    curl -fsSL "$REPO_RAW/docker/configs/cometbft-config.toml" -o "$DATA_DIR/configs/cometbft-config.toml"
+    curl -fsSL "$REPO_RAW/docker/configs/orqusbft.yaml" -o "$DATA_DIR/configs/orqusbft.yaml"
+
+    # Get seed peers from chain info
+    local cometbft_seeds=$(echo "$chain_info" | jq -r '.seeds.cometbft | join(",")')
+    local reth_bootnodes=$(echo "$chain_info" | jq -r '.seeds.reth | join(",")')
+
+    # Create .env file
+    info "Creating environment configuration..."
+    cat > "$DATA_DIR/.env" << EOF
+# Orqus Node Configuration
+# Generated by orqus-node init
+
+# Network
+NETWORK=$network
+CHAIN_ID=$chain_id
+
+# Docker images
+RETH_IMAGE=$RETH_IMAGE
+ORQUSBFT_IMAGE=$ORQUSBFT_IMAGE
+COMETBFT_IMAGE=$COMETBFT_IMAGE
+
+# Data directory
+DATA_DIR=$DATA_DIR
+
+# Node identity
+NODE_ID=$node_id
+
+# P2P Seeds (from chain-info.json)
+COMETBFT_SEEDS=$cometbft_seeds
+RETH_BOOTNODES=$reth_bootnodes
+
+# RPC binding (change to 0.0.0.0 to expose publicly)
+RPC_HOST=127.0.0.1
+RPC_PORT=8545
+WS_PORT=8546
+EOF
+
+    # Update CometBFT config with seeds
+    info "Configuring CometBFT..."
+    if [ -n "$cometbft_seeds" ] && [ "$cometbft_seeds" != "null" ]; then
+        sed -i.bak "s|^seeds = .*|seeds = \"$cometbft_seeds\"|" "$DATA_DIR/configs/cometbft-config.toml" 2>/dev/null || \
+        sed -i '' "s|^seeds = .*|seeds = \"$cometbft_seeds\"|" "$DATA_DIR/configs/cometbft-config.toml"
+    fi
+
+    # Copy config to cometbft directory
+    cp "$DATA_DIR/configs/cometbft-config.toml" "$DATA_DIR/cometbft/config/config.toml"
+
+    echo ""
+    info "Node initialized successfully!"
+    echo ""
+    echo "Node Information:"
+    echo "  Network:    $network"
+    echo "  Chain ID:   $chain_id"
+    echo "  Node ID:    $node_id"
+    echo "  Data Dir:   $DATA_DIR"
+    echo ""
+    echo "Next steps:"
+    echo "  orqus-node start    # Start the node"
+    echo "  orqus-node status   # Check sync status"
+    echo "  orqus-node logs -f  # View logs"
+    echo ""
+}
+
+# Start node
+cmd_start() {
+    check_initialized
+
+    info "Starting Orqus node..."
+    cd "$DATA_DIR"
+
+    # Pull latest images
+    info "Pulling latest images..."
+    docker compose pull 2>/dev/null || true
+
+    # Start services
+    docker compose up -d
+
+    info "Node started!"
+    echo ""
+    echo "Check status: orqus-node status"
+    echo "View logs:    orqus-node logs -f"
+}
+
+# Stop node
+cmd_stop() {
+    check_initialized
+
+    info "Stopping Orqus node..."
+    cd "$DATA_DIR"
+    docker compose down
+
+    info "Node stopped."
+}
+
+# Restart node
+cmd_restart() {
+    check_initialized
+
+    info "Restarting Orqus node..."
+    cd "$DATA_DIR"
+    docker compose restart
+
+    info "Node restarted."
+}
+
+# Show status
+cmd_status() {
+    check_initialized
+
+    echo ""
+    echo "Orqus Node Status"
+    echo "================="
+    echo ""
+
+    # Container status
+    echo "Containers:"
+    cd "$DATA_DIR"
+    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || \
+    docker compose ps
+
+    echo ""
+
+    # Check if CometBFT is running
+    if docker compose ps cometbft 2>/dev/null | grep -q "Up"; then
+        # Get sync status
+        echo "Sync Status:"
+        local status
+        status=$(docker compose exec -T cometbft wget -qO- http://localhost:26657/status 2>/dev/null || echo "{}")
+
+        local catching_up=$(echo "$status" | jq -r '.result.sync_info.catching_up // "unknown"')
+        local latest_height=$(echo "$status" | jq -r '.result.sync_info.latest_block_height // "0"')
+        local latest_time=$(echo "$status" | jq -r '.result.sync_info.latest_block_time // "unknown"')
+
+        echo "  Latest Block:  $latest_height"
+        echo "  Block Time:    $latest_time"
+        echo "  Catching Up:   $catching_up"
+
+        # Get peer count
+        local net_info
+        net_info=$(docker compose exec -T cometbft wget -qO- http://localhost:26657/net_info 2>/dev/null || echo "{}")
+        local peers=$(echo "$net_info" | jq -r '.result.n_peers // "0"')
+        echo "  Connected Peers: $peers"
+    else
+        warn "CometBFT is not running"
+    fi
+
+    echo ""
+}
+
+# Show logs
+cmd_logs() {
+    check_initialized
+
+    local follow=false
+    local lines=100
+    local service=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -f|--follow)
+                follow=true
+                shift
+                ;;
+            -n|--lines)
+                lines="$2"
+                shift 2
+                ;;
+            --service)
+                service="$2"
+                shift 2
+                ;;
+            *)
+                service="$1"
+                shift
+                ;;
+        esac
+    done
+
+    cd "$DATA_DIR"
+
+    local cmd="docker compose logs --tail $lines"
+    [ "$follow" = true ] && cmd="$cmd -f"
+    [ -n "$service" ] && cmd="$cmd $service"
+
+    eval $cmd
+}
+
+# Show node info
+cmd_info() {
+    check_initialized
+
+    echo ""
+    echo "Orqus Node Information"
+    echo "======================"
+    echo ""
+
+    # Load env
+    source "$DATA_DIR/.env" 2>/dev/null || true
+
+    echo "Configuration:"
+    echo "  Network:    ${NETWORK:-unknown}"
+    echo "  Chain ID:   ${CHAIN_ID:-unknown}"
+    echo "  Data Dir:   $DATA_DIR"
+    echo ""
+
+    # Get node ID from CometBFT
+    if [ -f "$DATA_DIR/cometbft/config/node_key.json" ]; then
+        local node_id
+        node_id=$(docker run --rm \
+            -v "$DATA_DIR/cometbft:/cometbft" \
+            "$COMETBFT_IMAGE" show-node-id 2>/dev/null)
+        echo "Node Identity:"
+        echo "  CometBFT Node ID: $node_id"
+    fi
+
+    # Get reth node info
+    cd "$DATA_DIR"
+    if docker compose ps reth 2>/dev/null | grep -q "Up"; then
+        local enode
+        enode=$(docker compose exec -T reth reth node-info 2>/dev/null | grep "enode://" || echo "")
+        if [ -n "$enode" ]; then
+            echo "  Reth Enode:       $enode"
+        fi
+    fi
+
+    echo ""
+    echo "RPC Endpoints (local):"
+    echo "  HTTP:     http://localhost:${RPC_PORT:-8545}"
+    echo "  WS:       ws://localhost:${WS_PORT:-8546}"
+    echo "  CometBFT: http://localhost:26657"
+    echo ""
+}
+
+# Update node
+cmd_update() {
+    check_initialized
+
+    info "Updating Orqus node..."
+    cd "$DATA_DIR"
+
+    # Pull latest images
+    info "Pulling latest images..."
+    docker compose pull
+
+    # Restart with new images
+    info "Restarting with new images..."
+    docker compose up -d
+
+    info "Node updated!"
+}
+
+# Reset node (keeps keys)
+cmd_reset() {
+    check_initialized
+
+    warn "This will reset all blockchain data but keep your node keys."
+    read -p "Are you sure? (y/N): " confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        info "Aborted."
+        exit 0
+    fi
+
+    info "Stopping node..."
+    cd "$DATA_DIR"
+    docker compose down 2>/dev/null || true
+
+    info "Resetting data..."
+    rm -rf "$DATA_DIR/reth/db"
+    rm -rf "$DATA_DIR/cometbft/data"
+    mkdir -p "$DATA_DIR/cometbft/data"
+
+    info "Data reset complete."
+    echo "Run 'orqus-node start' to start syncing from genesis."
+}
+
+# Purge node (removes everything)
+cmd_purge() {
+    warn "This will remove ALL node data including keys!"
+    read -p "Are you sure? (y/N): " confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        info "Aborted."
+        exit 0
+    fi
+
+    # Stop node if running
+    if [ -f "$DATA_DIR/docker-compose.yml" ]; then
+        info "Stopping node..."
+        cd "$DATA_DIR"
+        docker compose down 2>/dev/null || true
+    fi
+
+    info "Removing data directory..."
+    rm -rf "$DATA_DIR"
+
+    info "Node purged."
+}
+
+# Main
+main() {
+    # Check for no arguments
+    if [ $# -eq 0 ]; then
+        show_help
+        exit 0
+    fi
+
+    local command=$1
+    shift
+
+    case $command in
+        init)
+            cmd_init "$@"
+            ;;
+        start)
+            cmd_start "$@"
+            ;;
+        stop)
+            cmd_stop "$@"
+            ;;
+        restart)
+            cmd_restart "$@"
+            ;;
+        status)
+            cmd_status "$@"
+            ;;
+        logs)
+            cmd_logs "$@"
+            ;;
+        info)
+            cmd_info "$@"
+            ;;
+        update)
+            cmd_update "$@"
+            ;;
+        reset)
+            cmd_reset "$@"
+            ;;
+        purge)
+            cmd_purge "$@"
+            ;;
+        -h|--help|help)
+            show_help
+            ;;
+        -v|--version|version)
+            echo "orqus-node v${VERSION}"
+            ;;
+        *)
+            error "Unknown command: $command. Run 'orqus-node --help' for usage."
+            ;;
+    esac
+}
+
+main "$@"

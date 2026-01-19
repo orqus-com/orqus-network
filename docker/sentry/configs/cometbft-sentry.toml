@@ -1,0 +1,114 @@
+# CometBFT Configuration for Sentry Node
+#
+# Sentry nodes are public-facing and protect validators from direct exposure.
+# Key settings:
+# - pex = true (accept peer discovery from external nodes)
+# - persistent_peers = validators (always stay connected to validators)
+# - private_peer_ids = validators (never expose validator addresses)
+
+proxy_app = "tcp://orqusbft:8080"
+moniker = "orqus-sentry"
+db_backend = "goleveldb"
+db_dir = "data"
+log_level = "info"
+log_format = "plain"
+genesis_file = "config/genesis.json"
+priv_validator_key_file = "config/priv_validator_key.json"
+priv_validator_state_file = "data/priv_validator_state.json"
+node_key_file = "config/node_key.json"
+abci = "socket"
+filter_peers = false
+
+[rpc]
+laddr = "tcp://0.0.0.0:26657"
+cors_allowed_origins = ["*"]
+cors_allowed_methods = ["HEAD", "GET", "POST"]
+cors_allowed_headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
+unsafe = false
+max_open_connections = 900
+max_subscription_clients = 100
+max_subscriptions_per_client = 5
+timeout_broadcast_tx_commit = "10s"
+max_body_bytes = 1000000
+max_header_bytes = 1048576
+
+[p2p]
+laddr = "tcp://0.0.0.0:26656"
+
+# IMPORTANT: Set to your public IP for external nodes to connect
+external_address = ""
+
+# PEX enabled - Sentry needs to discover and accept external peers
+pex = true
+
+# Validators to always stay connected to (internal IPs)
+# Format: node_id@ip:port,node_id@ip:port
+# Fill in after getting validator node IDs
+persistent_peers = ""
+
+# CRITICAL: Never expose these peer addresses to external nodes
+# Put validator node IDs here to hide them
+private_peer_ids = ""
+
+# Don't put validators in unconditional - use persistent_peers instead
+unconditional_peer_ids = ""
+
+addr_book_file = "config/addrbook.json"
+addr_book_strict = false
+
+# Accept more inbound connections from external nodes
+max_num_inbound_peers = 100
+max_num_outbound_peers = 30
+
+persistent_peers_max_dial_period = "0s"
+flush_throttle_timeout = "100ms"
+max_packet_msg_payload_size = 1024
+send_rate = 5120000
+recv_rate = 5120000
+
+seed_mode = false
+private_peer_ids = ""
+allow_duplicate_ip = true
+handshake_timeout = "20s"
+dial_timeout = "3s"
+
+[mempool]
+version = "v1"
+recheck = true
+broadcast = true
+size = 5000
+max_txs_bytes = 1073741824
+cache_size = 10000
+keep-invalid-txs-in-cache = false
+max_tx_bytes = 1048576
+
+[statesync]
+enable = false
+
+[consensus]
+wal_file = "data/cs.wal/wal"
+timeout_propose = "3s"
+timeout_propose_delta = "500ms"
+timeout_prevote = "1s"
+timeout_prevote_delta = "500ms"
+timeout_precommit = "1s"
+timeout_precommit_delta = "500ms"
+timeout_commit = "2s"
+double_sign_check_height = 0
+skip_timeout_commit = false
+create_empty_blocks = true
+create_empty_blocks_interval = "0s"
+peer_gossip_sleep_duration = "100ms"
+peer_query_maj23_sleep_duration = "2s"
+
+[storage]
+discard_abci_responses = false
+
+[tx_index]
+indexer = "kv"
+
+[instrumentation]
+prometheus = true
+prometheus_listen_addr = ":26660"
+max_open_connections = 3
+namespace = "cometbft"

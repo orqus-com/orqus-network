@@ -1,0 +1,186 @@
+# Release workflow for Go projects (orqusbft)
+# Copy this to orqusbft/.github/workflows/release.yml
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+
+env:
+  GO_VERSION: '1.22'
+  BINARY_NAME: orqusbft
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            name: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            name: darwin-arm64
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.BINARY_NAME }} ./cmd/${{ env.BINARY_NAME }}
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          tar -czvf dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz ${{ env.BINARY_NAME }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-${{ matrix.name }}
+          path: dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name "*.tar.gz" -exec mv {} release/ \;
+          ls -la release/
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: orqusbft ${{ steps.version.outputs.version }}
+          body: |
+            ## orqusbft ${{ steps.version.outputs.version }}
+
+            ### Downloads
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | Linux | x86_64 | `orqusbft-linux-amd64.tar.gz` |
+            | Linux | arm64 | `orqusbft-linux-arm64.tar.gz` |
+            | macOS | x86_64 | `orqusbft-darwin-amd64.tar.gz` |
+            | macOS | arm64 (M1/M2) | `orqusbft-darwin-arm64.tar.gz` |
+
+            ### Quick Install
+            ```bash
+            # Linux x86_64
+            curl -LO https://github.com/orqus-chain/orqusbft/releases/download/${{ steps.version.outputs.version }}/orqusbft-linux-amd64.tar.gz
+            tar -xzf orqusbft-linux-amd64.tar.gz
+            sudo mv orqusbft /usr/local/bin/
+
+            # Verify
+            orqusbft --version
+            ```
+
+            ### Checksums
+            See `checksums.txt` for SHA256 checksums.
+          files: |
+            release/*
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest

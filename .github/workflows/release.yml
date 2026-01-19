@@ -1,0 +1,83 @@
+# Release workflow for orqus-network
+# Creates releases with install scripts and aggregated documentation
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release archive
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Create release directory
+          mkdir -p release/orqus-network-${VERSION}
+
+          # Copy files
+          cp -r docker release/orqus-network-${VERSION}/
+          cp -r networks release/orqus-network-${VERSION}/
+          cp -r scripts release/orqus-network-${VERSION}/
+          cp -r docs release/orqus-network-${VERSION}/
+          cp README.md LICENSE release/orqus-network-${VERSION}/
+
+          # Create archives
+          cd release
+          tar -czvf orqus-network-${VERSION}.tar.gz orqus-network-${VERSION}
+          zip -r orqus-network-${VERSION}.zip orqus-network-${VERSION}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Orqus Network ${{ steps.version.outputs.version }}
+          body: |
+            ## Orqus Network ${{ steps.version.outputs.version }}
+
+            ### Quick Install
+            ```bash
+            curl -L https://orqus.network/install | bash
+            orqus-node init --network testnet
+            orqus-node start
+            ```
+
+            ### Downloads
+            - `orqus-network-${{ steps.version.outputs.version }}.tar.gz` - Full package (Linux/macOS)
+            - `orqus-network-${{ steps.version.outputs.version }}.zip` - Full package (Windows)
+
+            ### Binary Downloads
+            Download individual binaries from component repositories:
+            - [orqus-reth releases](https://github.com/orqus-chain/orqus-reth/releases)
+            - [orqusbft releases](https://github.com/orqus-chain/orqusbft/releases)
+
+            See [Full Changelog](https://github.com/orqus-chain/orqus-network/compare/...${{ steps.version.outputs.version }})
+          files: |
+            release/orqus-network-${{ steps.version.outputs.version }}.tar.gz
+            release/orqus-network-${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}

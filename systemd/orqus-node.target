@@ -1,0 +1,8 @@
+[Unit]
+Description=Orqus Node Stack
+Documentation=https://github.com/orqus-chain/orqus-network
+Requires=cometbft.service orqusbft.service orqus-reth.service
+After=cometbft.service orqusbft.service orqus-reth.service
+
+[Install]
+WantedBy=multi-user.target

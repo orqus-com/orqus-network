@@ -1,0 +1,48 @@
+[Unit]
+Description=Orqus Reth Execution Layer
+Documentation=https://github.com/orqus-chain/orqus-reth
+After=network-online.target
+Wants=network-online.target
+Requires=orqusbft.service
+After=orqusbft.service
+
+[Service]
+Type=simple
+User=orqus
+Group=orqus
+ExecStart=/usr/local/bin/orqus-reth node \
+    --chain /etc/orqus/genesis.json \
+    --datadir /var/lib/orqus/reth \
+    --authrpc.jwtsecret /etc/orqus/jwt.hex \
+    --authrpc.addr 127.0.0.1 \
+    --authrpc.port 8551 \
+    --http \
+    --http.addr 127.0.0.1 \
+    --http.port 8545 \
+    --http.api eth,net,web3,txpool \
+    --ws \
+    --ws.addr 127.0.0.1 \
+    --ws.port 8546 \
+    --metrics 127.0.0.1:9001
+
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+# Environment
+Environment=RUST_LOG=info
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/orqus/reth
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=orqus-reth
+
+[Install]
+WantedBy=multi-user.target

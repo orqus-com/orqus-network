@@ -1,0 +1,97 @@
+version: '3.8'
+
+# Sentry Node Deployment
+# Sentry nodes act as a public-facing shield for validators
+# External nodes connect to Sentry, Sentry connects to Validators
+
+services:
+  orqus-reth:
+    image: ${RETH_IMAGE:-ghcr.io/orqus-chain/orqus-reth:latest}
+    container_name: orqus-reth-sentry
+    restart: unless-stopped
+    volumes:
+      - ${DATA_DIR:-./data}/reth:/data
+      - ${DATA_DIR:-./data}/jwt:/jwt:ro
+      - ../../networks/${NETWORK:-testnet}:/genesis:ro
+    ports:
+      # Public P2P - accept external connections
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      # RPC - only expose if needed (recommend keeping internal)
+      - "${RPC_HOST:-127.0.0.1}:${RPC_PORT:-8545}:8545"
+      - "${RPC_HOST:-127.0.0.1}:${WS_PORT:-8546}:8546"
+    command: >
+      node
+      --chain /genesis/genesis-alloc.json
+      --datadir /data
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,txpool
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 8546
+      --ws.api eth,net,web3,txpool
+      --authrpc.addr 0.0.0.0
+      --authrpc.port 8551
+      --authrpc.jwtsecret /jwt/jwt.hex
+      --port 30303
+      --nat extip:${EXTERNAL_IP}
+      --trusted-peers ${VALIDATOR_ENODES:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - orqus
+
+  orqusbft:
+    image: ${ORQUSBFT_IMAGE:-ghcr.io/orqus-chain/orqusbft:latest}
+    container_name: orqusbft-sentry
+    restart: unless-stopped
+    depends_on:
+      - orqus-reth
+      - cometbft
+    volumes:
+      - ${DATA_DIR:-./data}/orqusbft:/data
+      - ${DATA_DIR:-./data}/jwt:/jwt:ro
+      - ${DATA_DIR:-./data}/cometbft:/cometbft:ro
+      - ./configs/orqusbft.yaml:/config/orqusbft.yaml:ro
+    command: >
+      --config /config/orqusbft.yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - orqus
+
+  cometbft:
+    image: ${COMETBFT_IMAGE:-cometbft/cometbft:v0.38.15}
+    container_name: cometbft-sentry
+    restart: unless-stopped
+    volumes:
+      - ${DATA_DIR:-./data}/cometbft:/cometbft
+      - ../../networks/${NETWORK:-testnet}/cometbft-genesis.json:/cometbft/config/genesis.json:ro
+      - ./configs/cometbft-sentry.toml:/cometbft/config/config.toml:ro
+    ports:
+      # Public P2P - accept external connections
+      - "26656:26656"
+      # RPC - only expose if needed
+      - "${RPC_HOST:-127.0.0.1}:26657:26657"
+    environment:
+      - CMTHOME=/cometbft
+    command: start --proxy_app=tcp://orqusbft:8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - orqus
+
+networks:
+  orqus:
+    driver: bridge

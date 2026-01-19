@@ -1,0 +1,34 @@
+{
+  "name": "Orqus Testnet",
+  "chainId": 153871,
+  "networkId": 153871,
+  "nativeCurrency": {
+    "name": "ORQUS",
+    "symbol": "ORQ",
+    "decimals": 18
+  },
+  "rpc": {
+    "http": "https://rpc-testnet.orqus.network",
+    "ws": "wss://rpc-testnet.orqus.network/ws"
+  },
+  "explorer": "https://explorer-testnet.orqus.network",
+  "consensus": {
+    "type": "CometBFT",
+    "blockTime": "2s",
+    "epochLength": 270
+  },
+  "seeds": {
+    "cometbft": [
+      "<NODE_ID>@seed1.testnet.orqus.network:26656"
+    ],
+    "reth": [
+      "enode://<PUBKEY>@seed1.testnet.orqus.network:30303"
+    ]
+  },
+  "contracts": {
+    "validatorRegistry": "0x0000000000000000000000000000001000000001",
+    "staking": "0x0000000000000000000000000000001000000002"
+  },
+  "status": "active",
+  "launchDate": "2025-01-01T00:00:00Z"
+}

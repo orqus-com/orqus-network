@@ -1,0 +1,34 @@
+[Unit]
+Description=OrqusBFT ABCI Bridge
+Documentation=https://github.com/orqus-chain/orqusbft
+After=network-online.target
+Wants=network-online.target
+Requires=cometbft.service
+After=cometbft.service
+
+[Service]
+Type=simple
+User=orqus
+Group=orqus
+ExecStart=/usr/local/bin/orqusbft --config /etc/orqus/orqusbft.yaml
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+# Environment
+Environment=RUST_LOG=info
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/orqus/orqusbft
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=orqusbft
+
+[Install]
+WantedBy=multi-user.target
