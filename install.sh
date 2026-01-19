@@ -109,7 +109,7 @@ install_cli() {
 # Get latest release version from GitHub
 get_latest_version() {
     local repo=$1
-    curl -fsSL "https://api.github.com/repos/orqus-chain/$repo/releases/latest" 2>/dev/null | \
+    curl -fsSL "https://api.github.com/repos/orqus-com/$repo/releases/latest" 2>/dev/null | \
         grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo ""
 }
 
@@ -128,7 +128,7 @@ download_binary() {
 
     info "Downloading $binary $version for $PLATFORM..."
 
-    local url="https://github.com/orqus-chain/$repo/releases/download/$version/$binary-$PLATFORM.tar.gz"
+    local url="https://github.com/orqus-com/$repo/releases/download/$version/$binary-$PLATFORM.tar.gz"
     local tmp_file=$(mktemp)
 
     if ! curl -fsSL "$url" -o "$tmp_file"; then
