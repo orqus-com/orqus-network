@@ -93,10 +93,8 @@ install_cli() {
     trap "rm -rf $TMP_DIR" EXIT
 
     # Download from orqes.com (primary) or GitHub raw (fallback)
-    if ! curl -fsSL "https://orqes.com/orqus-node" -o "$TMP_DIR/orqus-node" 2>/dev/null; then
-        info "Trying GitHub fallback..."
-        curl -fsSL "$REPO_RAW/scripts/orqus-node" -o "$TMP_DIR/orqus-node"
-    fi
+    curl -fsSL "$REPO_RAW/scripts/orqus-node" -o "$TMP_DIR/orqus-node"
+    
     chmod +x "$TMP_DIR/orqus-node"
 
     if [ -w "$INSTALL_DIR" ]; then
