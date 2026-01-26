@@ -35,7 +35,7 @@ external_address = ""
 pex = true
 
 # K8s Test Cluster Seeds
-persistent_peers = "1206dae3ff4886b12a8e7f76b49ff487206bbf56@47.243.179.141:31690"
+persistent_peers = "563f6cc9e920bcf3e46bde0c7c85ff6419db004d@47.243.179.141:31690"
 
 private_peer_ids = ""
 unconditional_peer_ids = ""
