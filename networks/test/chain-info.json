@@ -1,0 +1,34 @@
+{
+  "name": "Orqus Test",
+  "chainId": 153871,
+  "networkId": 153871,
+  "nativeCurrency": {
+    "name": "ORQUS",
+    "symbol": "ORQ",
+    "decimals": 18
+  },
+  "rpc": {
+    "http": "https://rpc-test.orqes.com",
+    "ws": "wss://rpc-test.orqes.com/ws"
+  },
+  "explorer": "https://explorer-test.orqes.com",
+  "consensus": {
+    "type": "CometBFT",
+    "blockTime": "2s",
+    "epochLength": 270
+  },
+  "seeds": {
+    "cometbft": [
+      "1206dae3ff4886b12a8e7f76b49ff487206bbf56@47.243.179.141:31690"
+    ],
+    "reth": [
+      "enode://8318535b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed753547f11ca8696646f2f3acb08e31016afac23e630c5d11f59f61fef57b0d2aa5@47.243.179.141:31673"
+    ]
+  },
+  "contracts": {
+    "validatorRegistry": "0x0000000000000000000000000000001000000001",
+    "staking": "0x0000000000000000000000000000001000000002"
+  },
+  "status": "active",
+  "launchDate": "2026-01-26T07:50:16Z"
+}

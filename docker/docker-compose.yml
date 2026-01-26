@@ -16,7 +16,7 @@ services:
       - "30303:30303/udp"
     command: >
       node
-      --chain /genesis/genesis-alloc.json
+      --chain /genesis/el-genesis.json
       --datadir /data
       --http
       --http.addr 0.0.0.0
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${DATA_DIR:-./data}/cometbft:/cometbft
-      - ../networks/${NETWORK:-testnet}/cometbft-genesis.json:/cometbft/config/genesis.json:ro
+      - ../networks/${NETWORK:-testnet}/genesis.json:/cometbft/config/genesis.json:ro
       - ./configs/cometbft-config.toml:/cometbft/config/config.toml:ro
     ports:
       - "26656:26656"

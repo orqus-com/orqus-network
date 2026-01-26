@@ -22,7 +22,7 @@ services:
       - "${RPC_HOST:-127.0.0.1}:${WS_PORT:-8546}:8546"
     command: >
       node
-      --chain /genesis/genesis-alloc.json
+      --chain /genesis/el-genesis.json
       --datadir /data
       --http
       --http.addr 0.0.0.0
@@ -36,8 +36,7 @@ services:
       --authrpc.port 8551
       --authrpc.jwtsecret /jwt/jwt.hex
       --port 30303
-      --nat extip:${EXTERNAL_IP}
-      --trusted-peers ${VALIDATOR_ENODES:-}
+      --bootnodes ${RETH_BOOTNODES:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8545/health"]
       interval: 30s
@@ -74,8 +73,8 @@ services:
     restart: unless-stopped
     volumes:
       - ${DATA_DIR:-./data}/cometbft:/cometbft
-      - ../../networks/${NETWORK:-testnet}/cometbft-genesis.json:/cometbft/config/genesis.json:ro
-      - ./configs/cometbft-sentry.toml:/cometbft/config/config.toml:ro
+      - ../../networks/${NETWORK:-testnet}/genesis.json:/cometbft/config/genesis.json:ro
+      - ../../networks/${NETWORK:-testnet}/cometbft.toml:/cometbft/config/config.toml:ro
     ports:
       # Public P2P - accept external connections
       - "26656:26656"

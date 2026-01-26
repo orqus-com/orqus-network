@@ -13,6 +13,9 @@ CONFIG_DIR="/etc/orqus"
 DATA_DIR="/var/lib/orqus"
 METHOD="docker"  # docker or binary
 
+# GitHub authentication for private repos
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+
 # Component versions (update these for releases)
 RETH_VERSION="${RETH_VERSION:-latest}"
 ORQUSBFT_VERSION="${ORQUSBFT_VERSION:-latest}"
@@ -106,14 +109,27 @@ install_cli() {
     info "orqus-node CLI installed to $INSTALL_DIR/orqus-node"
 }
 
+# Build curl auth header if token is set
+get_auth_header() {
+    if [ -n "$GITHUB_TOKEN" ]; then
+        echo "-H \"Authorization: token $GITHUB_TOKEN\""
+    fi
+}
+
 # Get latest release version from GitHub
 get_latest_version() {
     local repo=$1
-    curl -fsSL "https://api.github.com/repos/orqus-com/$repo/releases/latest" 2>/dev/null | \
+    local auth_header=""
+
+    if [ -n "$GITHUB_TOKEN" ]; then
+        auth_header="-H \"Authorization: token $GITHUB_TOKEN\""
+    fi
+
+    eval curl -fsSL $auth_header "https://api.github.com/repos/orqus-com/$repo/releases/latest" 2>/dev/null | \
         grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo ""
 }
 
-# Download binary from GitHub releases
+# Download binary from GitHub releases (supports private repos with GITHUB_TOKEN)
 download_binary() {
     local repo=$1
     local binary=$2
@@ -128,11 +144,44 @@ download_binary() {
 
     info "Downloading $binary $version for $PLATFORM..."
 
-    local url="https://github.com/orqus-com/$repo/releases/download/$version/$binary-$PLATFORM.tar.gz"
     local tmp_file=$(mktemp)
+    local asset_name="$binary-$PLATFORM.tar.gz"
 
-    if ! curl -fsSL "$url" -o "$tmp_file"; then
-        error "Failed to download $binary from $url"
+    if [ -n "$GITHUB_TOKEN" ]; then
+        # Private repo: use GitHub API to get asset download URL
+        info "Using GitHub token for authentication..."
+
+        # Get release info
+        local release_info=$(curl -fsSL \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/orqus-com/$repo/releases/tags/$version" 2>/dev/null)
+
+        if [ -z "$release_info" ]; then
+            error "Failed to get release info for $repo $version"
+        fi
+
+        # Get asset ID
+        local asset_id=$(echo "$release_info" | grep -B 3 "\"name\": \"$asset_name\"" | grep '"id":' | head -1 | sed -E 's/.*"id": ([0-9]+).*/\1/')
+
+        if [ -z "$asset_id" ]; then
+            error "Asset $asset_name not found in release $version"
+        fi
+
+        # Download asset via API
+        if ! curl -fsSL \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "https://api.github.com/repos/orqus-com/$repo/releases/assets/$asset_id" \
+            -o "$tmp_file"; then
+            error "Failed to download $binary"
+        fi
+    else
+        # Public repo: direct download
+        local url="https://github.com/orqus-com/$repo/releases/download/$version/$asset_name"
+
+        if ! curl -fsSL "$url" -o "$tmp_file"; then
+            error "Failed to download $binary from $url"
+        fi
     fi
 
     tar -xzf "$tmp_file" -C /tmp
@@ -273,6 +322,7 @@ Usage: curl -L https://orqes.com/install | bash [options]
 Options:
   --method <type>    Installation method: docker (default) or binary
   --version <ver>    Version to install (default: latest)
+  --token <token>    GitHub Personal Access Token (for private repos)
   --help             Show this help message
 
 Examples:
@@ -286,10 +336,19 @@ Examples:
   curl -L https://orqes.com/install | bash -s -- --version v1.0.0
 
 Environment Variables:
+  GITHUB_TOKEN       GitHub Personal Access Token (required for private repos)
   ORQUS_VERSION      Version to install
   RETH_VERSION       orqus-reth version
   ORQUSBFT_VERSION   orqusbft version
   COMETBFT_VERSION   CometBFT version
+
+Examples with private repos:
+  # Set token and install
+  GITHUB_TOKEN=ghp_xxxx curl -L https://orqes.com/install | bash -s -- --method binary
+
+  # Or export first
+  export GITHUB_TOKEN=ghp_xxxx
+  curl -L https://orqes.com/install | bash -s -- --method binary
 
 For more information: $REPO_URL
 EOF
@@ -307,6 +366,10 @@ parse_args() {
                 VERSION="$2"
                 RETH_VERSION="$2"
                 ORQUSBFT_VERSION="$2"
+                shift 2
+                ;;
+            --token)
+                GITHUB_TOKEN="$2"
                 shift 2
                 ;;
             --help|-h)
