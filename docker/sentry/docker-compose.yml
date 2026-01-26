@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${DATA_DIR:-./data}/reth:/data
-      - ${DATA_DIR:-./data}/jwt:/jwt:ro
+      - ../../networks/${NETWORK:-testnet}/jwt.hex:/jwt/jwt.hex:ro
       - ../../networks/${NETWORK:-testnet}:/genesis:ro
     ports:
       # Public P2P - accept external connections
@@ -54,7 +54,7 @@ services:
       - cometbft
     volumes:
       - ${DATA_DIR:-./data}/orqusbft:/data
-      - ${DATA_DIR:-./data}/jwt:/jwt:ro
+      - ../../networks/${NETWORK:-testnet}/jwt.hex:/jwt/jwt.hex:ro
       - ${DATA_DIR:-./data}/cometbft:/cometbft:ro
       - ./configs/orqusbft.yaml:/config/orqusbft.yaml:ro
     command: >
@@ -71,6 +71,7 @@ services:
     image: ${COMETBFT_IMAGE:-cometbft/cometbft:v0.38.15}
     container_name: cometbft-sentry
     restart: unless-stopped
+    user: "0:0"
     volumes:
       - ${DATA_DIR:-./data}/cometbft:/cometbft
       - ../../networks/${NETWORK:-testnet}/genesis.json:/cometbft/config/genesis.json:ro
