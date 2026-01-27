@@ -59,15 +59,8 @@ handshake_timeout = "20s"
 dial_timeout = "3s"
 
 [mempool]
-version = "v1"
-recheck = true
-# RPC node: don't broadcast to peers, just forward to validators
-broadcast = false
-size = 1000
-max_txs_bytes = 104857600
-cache_size = 5000
-keep-invalid-txs-in-cache = false
-max_tx_bytes = 1048576
+# Use nop mempool - transactions are handled by Reth P2P
+type = "nop"
 
 [statesync]
 enable = false
