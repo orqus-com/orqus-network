@@ -69,7 +69,14 @@ keep-invalid-txs-in-cache = false
 max_tx_bytes = 1048576
 
 [statesync]
-enable = false
+enable = true
+rpc_servers = "47.243.179.141:31657,47.243.179.141:31657"
+trust_height = 34000
+trust_hash = "B89E786C96E93AD04E98748D71EBEC728FEDA3C8B4436DCA8E1666278ADE1FEB"
+trust_period = "168h"
+discovery_time = "15s"
+chunk_request_timeout = "10s"
+chunk_fetchers = "4"
 
 [consensus]
 wal_file = "data/cs.wal/wal"
