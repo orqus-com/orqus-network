@@ -34,8 +34,8 @@ external_address = ""
 
 pex = true
 
-# K8s Test Cluster Seeds
-persistent_peers = "563f6cc9e920bcf3e46bde0c7c85ff6419db004d@47.243.179.141:31259"
+# K8s Test Cluster Seeds (all 4 nodes for NodePort load balancing)
+persistent_peers = "1206dae3ff4886b12a8e7f76b49ff487206bbf56@47.243.179.141:31259,563f6cc9e920bcf3e46bde0c7c85ff6419db004d@47.243.179.141:31259,84577a894971954599af1266909332c79ff260de@47.243.179.141:31259,e2c3d4c461031cc089eab656a524b5443a9f191b@47.243.179.141:31259"
 
 private_peer_ids = ""
 unconditional_peer_ids = ""
