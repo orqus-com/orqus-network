@@ -43,14 +43,15 @@ unconditional_peer_ids = ""
 addr_book_file = "config/addrbook.json"
 addr_book_strict = false
 
+# 最大化同步速度
 max_num_inbound_peers = 100
-max_num_outbound_peers = 30
+max_num_outbound_peers = 50
 
 persistent_peers_max_dial_period = "0s"
-flush_throttle_timeout = "100ms"
-max_packet_msg_payload_size = 1024
-send_rate = 5120000
-recv_rate = 5120000
+flush_throttle_timeout = "10ms"
+max_packet_msg_payload_size = 65536
+send_rate = 104857600
+recv_rate = 104857600
 
 seed_mode = false
 allow_duplicate_ip = true
